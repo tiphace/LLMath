@@ -10,7 +10,7 @@ node -v
 npm -v
 ```
 
-If not, refer to [https://nodejs.org/zh-cn/download]
+If not, refer to https://nodejs.org/zh-cn/download
 
 ## Step 1
 
