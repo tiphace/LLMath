@@ -61,10 +61,6 @@ Copy main.py to backend/
 
 ## Step 5
 
-Replace .tsx files.
-
-## Step 6
-
 ```bash
 cd backend
 uvicorn main:app --reload
