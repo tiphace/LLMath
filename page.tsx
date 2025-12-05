@@ -1,12 +1,12 @@
 "use client";
 
-import {useState} from "react";
+import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
 import { 
-  Play, RotateCcw, Edit2, X, ChevronDown, CheckCircle, AlertCircle, Terminal, Lock, Undo
+  Play, RotateCcw, Edit2, X, ChevronDown, CheckCircle, AlertCircle, Terminal, Undo, RefreshCw, Target
 } from "lucide-react";
 
 const preprocessLaTeX = (content: string) => {
@@ -55,7 +55,9 @@ type Step = {
 };
 
 export default function Home() {
-  const [problem, setProblem] = useState("");
+  const [problem, setProblem] = useState(""); // 输入框的内容
+  const [activeProblem, setActiveProblem] = useState(""); // 当前正在解的题目
+  
   const [steps, setSteps] = useState<Step[]>([]);
   const [backupSteps, setBackupSteps] = useState<Step[]>([]);
   
@@ -69,6 +71,10 @@ export default function Home() {
     setLoading(true);
     setSteps([]); 
     setBackupSteps([]);
+    
+    // 锁存当前题目, 后续所有交互都基于 activeProblem
+    setActiveProblem(problem); 
+
     try {
       const res = await fetch("http://localhost:8000/api/solve", {
         method: "POST",
@@ -78,14 +84,14 @@ export default function Home() {
       const data = await res.json();
       setSteps(data.steps || []);
     } catch (e) {
-      alert("连接失败，请检查后端服务");
+      alert("连接失败, 请检查后端服务");
     } finally {
       setLoading(false);
     }
   };
 
   const startEdit = (step: Step) => {
-    if (loading || step.index === 1) return;
+    if (loading) return;
     setEditingId(step.index);
     setEditContent(step.content); 
   };
@@ -94,8 +100,6 @@ export default function Home() {
     setLoading(true);
     setEditingId(null);
     setPendingEditId(index);
-    
-    // 保存快照
     setBackupSteps([...steps]);
 
     try {
@@ -106,7 +110,7 @@ export default function Home() {
           current_steps: steps,
           edit_index: index,
           new_content: editContent,
-          problem: problem
+          problem: activeProblem // 传给 LLM 原始问题, 确保不跑偏
         }),
       });
       const data = await res.json();
@@ -119,11 +123,10 @@ export default function Home() {
     }
   };
 
-  // 回退功能
   const handleRollback = () => {
     if (backupSteps.length > 0) {
       setSteps(backupSteps);
-      setBackupSteps([]); // 回退后清空备份
+      setBackupSteps([]);
     }
   };
 
@@ -139,16 +142,16 @@ export default function Home() {
       
       {/* 左侧：输入区 */}
       <div className="w-1/3 flex flex-col border-r border-gray-200 bg-white p-6 shadow-xl z-10">
-        <h1 className="text-xl font-bold text-indigo-700 mb-6 flex items-center gap-2">
-          <RotateCcw className="w-6 h-6" /> LLMath: Neural-Symbolic Reasoning Tool
+        <h1 className="text-xl font-bold text-indigo-700 mb-10 flex items-center gap-2">
+          <RotateCcw className="w-6 h-10" /> LLMath: Neural-Symbolic Reasoning Tool
         </h1>
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">在下方输入您的问题</label>
+            <label className="block text-base font-bold text-green-800 mb-5">在下方输入您的问题</label>
             <textarea
               value={problem}
               onChange={(e) => setProblem(e.target.value)}
-              className="w-full p-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 h-40 resize-none shadow-inner bg-gray-50 text-sm"
+              className="w-full p-4 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 h-50 resize-none shadow-inner bg-gray-50 text-sm"
               placeholder="例如: 求 e^x 的导函数."
             />
           </div>
@@ -160,6 +163,15 @@ export default function Home() {
             {loading ? <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full"/> : <Play size={18} />}
             开始推理
           </button>
+          <div className="text-sm text-gray-400 mt-10 leading-relaxed">
+            <p className="font-bold text-gray-700 mb-2">交互指南:</p>
+            <ul className="list-disc pl-4 space-y-2 text-sm">
+              <li>生成的证明步骤将显示在右侧。</li>
+              <li>点击任意一个步骤即可修改推导思路。</li>
+              <li>修改后，系统将自动推导后续步骤。</li>
+              <li>如果提示修改导致数学错误，您可以选择<span className="text-red-600 font-bold">回退</span>到上一个可靠的版本。</li>
+            </ul>
+          </div>
         </div>
       </div>
 
@@ -167,15 +179,33 @@ export default function Home() {
       <div className="w-2/3 bg-slate-50 p-8 overflow-y-auto">
         <div className="max-w-3xl mx-auto space-y-6">
           
-          {(steps || []).length === 0 && !loading && (
+          {(steps.length === 0 && !loading) && (
              <div className="text-center text-gray-400 mt-24">
-                <p className="text-lg font-medium">等待输入...</p>
+                <p className="text-lg font-medium">您暂未输入问题</p>
              </div>
           )}
 
+          {/* Step 0: Origin (静态展示) */}
+          {activeProblem && steps.length > 0 && (
+            <div className="relative bg-slate-100 rounded-xl border border-slate-300 shadow-sm opacity-90 hover:opacity-100 transition-opacity">
+               {/* 序号 0 */}
+               <div className="absolute -left-4 top-6 w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border border-slate-300 bg-slate-200 text-slate-600 shadow-sm z-10">
+                  Ori.
+               </div>
+               <div className="p-6">
+                  <div className="flex items-center gap-2 mb-3 text-slate-500 font-bold text-xs uppercase tracking-wider">
+                     <Target size={14} /> 您的原问题
+                  </div>
+                  <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-inner">
+                     <MathRenderer content={activeProblem} />
+                  </div>
+               </div>
+            </div>
+          )}
+
+          {/* ================= Step 1 ~ N (动态列表) ================= */}
           {(steps || []).map((step) => {
             const isFaded = loading && pendingEditId !== null && step.index >= pendingEditId;
-            const isFirstStep = step.index === 1;
 
             return (
               <div 
@@ -200,7 +230,7 @@ export default function Home() {
 
                 <div className="p-6">
                   {editingId === step.index ? (
-                    // 编辑模式
+                    // --- 编辑模式 ---
                     <div className="space-y-3 animate-in fade-in zoom-in-95 duration-200">
                       <div className="flex justify-between items-center text-sm font-bold text-indigo-700 bg-indigo-50 p-2 rounded">
                         <span className="flex items-center gap-2"><Edit2 size={14}/> 修改此步</span>
@@ -220,43 +250,41 @@ export default function Home() {
                       </div>
                     </div>
                   ) : (
-                    // 展示模式
-                    <div 
-                        className={`group ${!isFirstStep ? 'cursor-pointer' : 'cursor-default'}`} 
-                        onClick={() => startEdit(step)}
-                    >
+                    // --- 展示模式 ---
+                    // 现在 Step 1 也可以点击修改了，因为有 Step 0 作为锚点
+                    <div className="group cursor-pointer" onClick={() => startEdit(step)}>
                       
-                      {!isFirstStep ? (
-                        <div className="flex justify-end mb-[-20px] relative z-10">
-                          <div className="text-xs text-indigo-500 font-medium opacity-0 group-hover:opacity-100 transition-opacity bg-indigo-50 px-2 py-1 rounded-full flex items-center gap-1 hover:bg-indigo-100 hover:shadow-sm">
-                            <Edit2 size={12}/> 点击修改
-                          </div>
+                      {/* 修改提示按钮 */}
+                      <div className="flex justify-end mb-[-20px] relative z-10">
+                        <div className="text-xs text-indigo-500 font-medium opacity-0 group-hover:opacity-100 transition-opacity bg-indigo-50 px-2 py-1 rounded-full flex items-center gap-1 hover:bg-indigo-100 hover:shadow-sm">
+                          <Edit2 size={12}/> 点击修改
                         </div>
-                      ) : (
-                        <div className="flex justify-end mb-[-20px] relative z-10">
-                            <div className="opacity-0 group-hover:opacity-100 transition-opacity text-[14px] text-red-500 flex items-center gap-1 px-2 py-1">
-                                <Lock size={10} /> 初始条件不可修改
-                            </div>
-                        </div>
-                      )}
+                      </div>
 
                       <div className="min-h-[40px]">
                         <MathRenderer content={step.content} />
                       </div>
 
-                      {/* 如果状态是 Error，显示回退按钮 */}
+                      {/* 错误回退按钮 */}
                       {step.status === 'error' && (
                         <div className="mt-4 mb-2 flex justify-end animate-in fade-in slide-in-from-top-2">
-                           <button 
-                             onClick={(e) => {
-                               e.stopPropagation(); // 阻止触发编辑
-                               handleRollback();
-                             }}
-                             className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 shadow-md transition-all active:scale-95 text-xs font-bold"
-                           >
-                             <Undo size={14} />
-                             修改无效, 可以选择回退
-                           </button>
+                           {backupSteps.length > 0 ? (
+                             <button 
+                               onClick={(e) => {
+                                 e.stopPropagation(); 
+                                 handleRollback();
+                               }}
+                               className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 shadow-md transition-all active:scale-95 text-xs font-bold"
+                             >
+                               <Undo size={14} />
+                               修改无效，点击回退
+                             </button>
+                           ) : (
+                             <div className="flex items-center gap-2 text-red-600 bg-red-50 px-4 py-2 rounded-lg border border-red-100 text-xs font-bold">
+                               <RefreshCw size={14} />
+                               生成失败，请尝试简化或修改左侧题目
+                             </div>
+                           )}
                         </div>
                       )}
 
@@ -294,7 +322,7 @@ export default function Home() {
           
           {loading && pendingEditId === null && (
              <div className="flex justify-center p-8 animate-pulse">
-                <span className="text-indigo-600 font-bold text-sm">正在寻找一种可能的解...</span>
+                <span className="text-purple-800 font-bold text-xl">正在寻找一种可能的解...</span>
              </div>
           )}
         </div>
