@@ -22,7 +22,7 @@ app.add_middleware(
 
 client = OpenAI(
     api_key=os.getenv("OPENAI_API_KEY"), 
-    base_url="https://www.dmxapi.cn/v1"
+    base_url="https:/xxx"
 )
 
 class ProofStep(BaseModel):
