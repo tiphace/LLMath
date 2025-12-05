@@ -22,7 +22,7 @@ app.add_middleware(
 
 client = OpenAI(
     api_key=os.getenv("OPENAI_API_KEY"), 
-    base_url="https://xxx"
+    base_url="https://www.dmxapi.cn/v1"
 )
 
 class ProofStep(BaseModel):
@@ -43,7 +43,7 @@ class UpdateRequest(BaseModel):
 
 SYSTEM_PROMPT = """
 你是一个“数学辅助求解专家”。
-请生成一份**像教科书一样流畅**的数学证明步骤。将解题过程尽可能细致地拆分为严格的逻辑步骤。
+请生成一份**像教科书一样流畅**的数学证明步骤。将解题过程尽可能细致地拆分为严格的逻辑步骤。但不要重述原问题。
 
 【输出格式】
 只输出一个 JSON 对象：
